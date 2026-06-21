@@ -21,7 +21,7 @@ from internlm.initialize.initialize_tensor import (
     uniform_,
 )
 from internlm.model.base_model import BaseModel
-from internlm.model.modules.embedding import Embedding1D
+from internlm.model.modules.embedding import Embedding1D, new_rotary_embedding
 from internlm.model.modules.linear import new_linear
 from internlm.model.modules.mha import GQA
 from internlm.model.modules.mlp import new_feed_forward
@@ -118,6 +118,7 @@ class InternLM2Decoder(nn.Module):
         mlp_layer_fusion: bool = False,
         multiple_of: int = 256,
         enable_qkv_fusion: bool = True,
+        rotary_emb=None,
     ):
         super().__init__()
         self.checkpoint = checkpoint
@@ -154,6 +155,7 @@ class InternLM2Decoder(nn.Module):
             bias=not no_bias,
             rope_base=rope_base,
             enable_qkv_fusion=enable_qkv_fusion,
+            rotary_emb=rotary_emb,
         )
 
         self.dropout1 = nn.Dropout(drop_rate)
@@ -409,6 +411,18 @@ class InternLM2(BaseModel):
                 else:
                     uniform_(std=embedding_init_std)(param)
 
+        rotary_emb_scale_base = 0
+        rotary_emb_dim = hidden_size // num_attention_heads
+        rotary_emb_instance = new_rotary_embedding(
+            rotary_emb_dim,
+            base=rope_base,
+            scale_base=rotary_emb_scale_base,
+            device=device,
+            max_position_embeddings=max_position_embeddings,
+            scaling_factor=1.0,
+            rotary_type="dynamic_ntk" if use_dynamic_ntk_rope else "native",
+        )
+
         self.layers = nn.ModuleList(
             [
                 InternLM2Decoder(
@@ -443,6 +457,7 @@ class InternLM2(BaseModel):
                     mlp_layer_fusion=mlp_layer_fusion,
                     multiple_of=multiple_of,
                     enable_qkv_fusion=enable_qkv_fusion,
+                    rotary_emb=rotary_emb_instance,
                 )
                 for lid in range(num_layers)
             ]

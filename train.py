@@ -11,12 +11,38 @@ from internlm.initialize import initialize_distributed_env
 from internlm.model.builder import create_model
 from internlm.monitor import internevo_monitor
 from internlm.utils.common import parse_args
+from contextlib import nullcontext
+import os
+import torch
+import torch.distributed as dist
 
 
 @internevo_monitor(feishu_alert=True, clean_run=True)
 def main(args):
     # initialize model
     model = create_model()
+
+    use_profile = False
+    prof_ctx = nullcontext()
+    prof_obj = None
+    rank = dist.get_rank()
+    if use_profile and rank == 0:
+        logdir = "./profile_log"
+        run_dir = os.path.join(logdir, f"job{os.environ.get('SLURM_JOB_ID', 'na')}_rank{rank}")
+        os.makedirs(run_dir, exist_ok=True)
+        torch.backends.cudnn.benchmark = True
+        prof_obj = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            record_shapes=False,
+            profile_memory=False,
+            with_flops=False,
+            with_modules=False,
+            with_stack=False,
+        )
+        prof_ctx = prof_obj
 
     # initialize train dataloader
     train_dl, dataset_types = build_train_loader_with_data_type()
@@ -29,7 +55,13 @@ def main(args):
     trainer = TrainerBuilder(model, train_dl, val_dls, **merged_args)
 
     # training
-    trainer.fit()
+    with prof_ctx:
+        trainer.fit()
+    if use_profile and rank == 0:
+        prof_obj.export_chrome_trace(os.path.join(run_dir, "trace_rank0.json"))
+
+    if dist.is_initialized():
+        dist.barrier()
 
 
 if __name__ == "__main__":

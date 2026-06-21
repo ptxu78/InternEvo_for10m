@@ -406,6 +406,7 @@ class GQA(nn.Module):
         dtype: Optional[torch.dtype] = None,
         qk_interleaved: Optional[bool] = True,
         enable_qkv_fusion: bool = True,
+        rotary_emb=None,
     ) -> None:
         super().__init__()
         self.layer_idx = layer_idx
@@ -435,7 +436,9 @@ class GQA(nn.Module):
         assert self.use_dynamic_ntk_rope is False, "Not support dynamic ntk rope yet."
         assert self.embed_dim % num_heads == 0, "embedding dim must be divisible by num_heads"
 
-        if self.rotary_emb_dim > 0:
+        if rotary_emb is not None:
+            self.rotary_emb = rotary_emb
+        elif self.rotary_emb_dim > 0:
             self.rotary_emb = new_rotary_embedding(
                 self.rotary_emb_dim,
                 base=rope_base,
@@ -445,6 +448,8 @@ class GQA(nn.Module):
                 scaling_factor=1.0,
                 rotary_type="dynamic_ntk" if self.use_dynamic_ntk_rope else "native",
             )
+        else:
+            self.rotary_emb = None
 
         if enable_qkv_fusion:
             assert bias is False, "Fuesd wqkv only support bias is False."

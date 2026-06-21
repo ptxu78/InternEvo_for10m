@@ -226,7 +226,7 @@ def get_megatron_flops(
         (checkpoint_activations_factor * ((8 + mlp_ratio * 4) * global_batch_size * seq_len * hidden_size**2))
         * num_layers
         # attn
-        + attn_checkpoint_activation_factor * (4 * global_batch_size * seq_len**2 * hidden_size) * num_layers
+        + attn_checkpoint_activation_factor * (4 * global_batch_size * seq_len**2 * hidden_size * 1 / 2) * num_layers
         # head
         + 6 * global_batch_size * seq_len * hidden_size * vocab_size
     )

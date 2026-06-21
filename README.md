@@ -221,3 +221,11 @@ InternEvo codebase is an open-source project contributed by Shanghai AI Laborato
     year={2023}
 }
 ```
+
+
+## 显存优化需要对cross entropy.py L233进行修改:
+/mnt/shared-storage-user/ailab-sys/xuhaoran/miniconda3/envs/internevo_env_pity/lib/python3.10/site-packages/flash_attn/ops/triton/cross_entropy.py
+## 一些常见的代码修改位置
+[zigzag_ring_flash_attn_with_sliding_window.py](./internlm/model/ops/ring_flash_attn/zigzag_ring_flash_attn_with_sliding_window.py)
+[line958读取intra_window_group](./internlm/model/ops/attention.py)
+
