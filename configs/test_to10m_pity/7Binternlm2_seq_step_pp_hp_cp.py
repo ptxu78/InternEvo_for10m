@@ -70,7 +70,7 @@ data = dict(
     valid_every=0,
     pack_sample_into_one=False,
     total_steps=_get_env("CFG_TOTAL_STEPS", 5),
-    skip_batches="",
+    skip_batches=str(_get_env("CFG_SKIP_BATCHES", "")),
     # rampup_batch_size (str): A string with three space-separated integers representing the
     #       starting batch size, the increment, and the number of steps between
     #       each increment. For example, "192 24 8" means that the batch size (micro_num)
@@ -81,9 +81,10 @@ data = dict(
     min_length=50,
     train_folder=TRAIN_FOLDER,
     valid_folder=VALID_FOLDER,
-    empty_cache_and_diag_interval=200,
+    empty_cache_and_diag_interval=_get_env("CFG_EMPTY_CACHE_AND_DIAG_INTERVAL", 200),
     diag_outlier_ratio=1.1,
     use_packed_dataset=False,
+    fixed_random_dataset_seqlen=_get_env("CFG_FIXED_RANDOM_DATASET_SEQLEN", True),
 )
 
 grad_scaler = dict(
@@ -107,8 +108,8 @@ grad_scaler = dict(
 
 hybrid_zero_optimizer = dict(
     # Enable low_level_optimzer overlap_communication
-    overlap_sync_grad=True,
-    overlap_sync_param=False, # True
+    overlap_sync_grad=_get_env("CFG_OVERLAP_SYNC_GRAD", False),
+    overlap_sync_param=_get_env("CFG_OVERLAP_SYNC_PARAM", False), # True
     # bucket size for nccl communication params
     reduce_bucket_size=512 * 1024 * 1024,
     # grad clipping
@@ -128,7 +129,7 @@ hybrid_zero_optimizer = dict(
 
 #         * op_types that ends with "naive" only support parallel_output=False;
 #         * if in no-GPU env, only "torch_naive" and "py_vocab_parallel" are supported.
-loss = dict(label_smoothing=0, op_type="flash_vocab_parallel")
+loss = dict(label_smoothing=0, op_type="py_vocab_parallel")
 
 adam = dict(
     lr=1e-4,
@@ -161,6 +162,8 @@ selective_checkpoint = False
 # selective_checkpoint_offload = False
 
 use_fp32_norm = False
+USE_FLASH_ATTN = _get_env("CFG_USE_FLASH_ATTN", False)
+npu_fixedlen_flash_2d = _get_env("CFG_NPU_FIXEDLEN_FLASH_2D", False)
 model = dict(
     checkpoint=True,
     num_chunks=1,
@@ -178,7 +181,7 @@ model = dict(
     norm_type="rmsnorm",
     layer_norm_epsilon=1e-5,
     num_kv_attention_heads=NUM_KV_ATTENTION_HEAD,
-    use_flash_attn=True,
+    use_flash_attn=USE_FLASH_ATTN,
     # Whether the odd and even columns of the query and key in the model are normally interleaved.
     # If it's True, the model's odd and even columns are normally ordered; if it's False,
     # it means that the model has prematurely concatenated all odd columns and even columns in front
@@ -227,7 +230,7 @@ parallel = dict(
         enable=True,
         head_size=HEAD_SIZE,
         context_size=CONTEXT_SIZE,
-        window_size=1,
+        window_size=_get_env("CFG_WINDOW_SIZE", 1),
         device_placement_strategy=dict(head_first=True, interleaved=False),
     ),
 )

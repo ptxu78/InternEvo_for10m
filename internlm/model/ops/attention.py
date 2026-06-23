@@ -7,6 +7,7 @@ This file implements support for the attention operators.
 """
 
 import math
+import os
 from enum import Enum
 from typing import Callable, Tuple
 
@@ -430,8 +431,27 @@ def _npu_fixedlen_qkvsplited_attn(
         q, k, v = q.squeeze(dim=2), k.squeeze(dim=2), v.squeeze(dim=2)
 
     _, seqlen, n_head, _ = q.shape
-    sparse_mode = 0
-    attention_mask = torch.triu(torch.ones(seqlen, seqlen, device=get_current_device()), 1).bool()
+    if os.environ.get("NPU_FA_FIXEDLEN_USE_TND_VARLEN", "0") == "1":
+        cu_seqlens = torch.tensor([0, seqlen], dtype=torch.int64, device=get_current_device())
+        return _npu_fused_varlen_qkvsplited_attn(
+            q,
+            k,
+            v,
+            dropout_p,
+            softmax_scale,
+            causal,
+            seqlen,
+            seqlen,
+            cu_seqlens,
+            cu_seqlens,
+        )
+
+    sparse_mode = int(os.environ.get("NPU_FA_FIXEDLEN_SPARSE_MODE", "0"))
+    mask_size = int(os.environ.get("NPU_FA_FIXEDLEN_MASK_SIZE", str(seqlen)))
+    if mask_size <= 0:
+        mask_size = seqlen
+    mask_size = min(mask_size, seqlen)
+    attention_mask = torch.triu(torch.ones(mask_size, mask_size, device=get_current_device()), 1).bool()
 
     return _origin_npu_fixedlen_qkvsplited_func(
         query=q,
@@ -856,7 +876,14 @@ def _select_attn_op(op_type: AttnOpType) -> Tuple[AttnType, Callable]:
             else:
                 attn_type = AttnType.Flash
         elif device_backend == AcceleratorType.NPU and is_torch_npu:
-            assert enable_2D_sp is False, "2D attention for npu is not yet implemented"
+            allow_npu_fixedlen_flash_2d = (
+                enable_2D_sp is True
+                and gpc.config.get("npu_fixedlen_flash_2d", False)
+                and gpc.config.data.get("use_packed_dataset", True) is False
+            )
+            assert (
+                enable_2D_sp is False or allow_npu_fixedlen_flash_2d
+            ), "2D attention for npu is not yet implemented unless npu_fixedlen_flash_2d is enabled"
 
             attn_type = AttnType.NPUFlash
         elif device_backend in [AcceleratorType.DIPU, AcceleratorType.DITORCH] and deeplink_flash_attn_impl:

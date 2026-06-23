@@ -7,6 +7,7 @@ from typing import Callable
 import torch
 from torch import nn
 
+from internlm.accelerator import get_accelerator
 from internlm.core.context import ParallelMode
 from internlm.core.context import global_context as gpc
 from internlm.core.parallel.comm.utils import _gather, _split
@@ -15,6 +16,7 @@ from internlm.utils.parallel import is_using_hf
 from internlm.utils.utils import TensorParallelMode
 
 logger = get_logger(__file__)
+internlm_accelerator = get_accelerator()
 
 
 def _split_data_for_sequence_parallel(data, label):
@@ -82,13 +84,13 @@ def _split_data_for_2D_sequence_parallel(data, label):
     # get selected index
     if hp_size == sp_size:
         # rank0:0,1 rank1:2,3 rank2:4,5 rank3:6,7 rank4:8,9 rank5:10,11 rank6:12,13 rank7:14,15
-        index = torch.tensor([hp_rank * stride, (hp_rank * stride + 1)], device="cpu", pin_memory=True).cuda(
-            non_blocking=True
+        index = torch.tensor([hp_rank * stride, (hp_rank * stride + 1)], device="cpu", pin_memory=True).to(
+            internlm_accelerator.current_device_name(), non_blocking=True
         )
     elif cp_size == sp_size:
         # rank0:0,15 rank1:1,14 rank2:2,13 rank3:3,12 rank4:4,11 rank5:5,10 rank6:6,9 rank7:7,8
-        index = torch.tensor([cp_rank, (2 * cp_size - cp_rank - 1)], device="cpu", pin_memory=True).cuda(
-            non_blocking=True
+        index = torch.tensor([cp_rank, (2 * cp_size - cp_rank - 1)], device="cpu", pin_memory=True).to(
+            internlm_accelerator.current_device_name(), non_blocking=True
         )
     else:
         """
@@ -109,7 +111,9 @@ def _split_data_for_2D_sequence_parallel(data, label):
         else:
             _index = (2 * sp_size - 2) - (hp_size - hp_rank - 1) * stride - cp_rank * hp_size
 
-        index = torch.tensor([_index, _index + 1], device="cpu", pin_memory=True).cuda(non_blocking=True)
+        index = torch.tensor([_index, _index + 1], device="cpu", pin_memory=True).to(
+            internlm_accelerator.current_device_name(), non_blocking=True
+        )
 
     data["input_ids"] = data["input_ids"].index_select(seq_dim, index)
     data["input_ids"] = data["input_ids"].view(

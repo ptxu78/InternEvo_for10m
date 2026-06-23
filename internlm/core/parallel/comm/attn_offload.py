@@ -1,9 +1,10 @@
 import torch
 
-from internlm.utils.common import get_current_device
+from internlm.utils.common import get_accelerator, get_current_device
 
 global_attn_offload = None
 
+internlm_accelerator = get_accelerator()
 
 class AttnOffloadManager:
     """
@@ -15,9 +16,9 @@ class AttnOffloadManager:
         self.cpu_offload = enable_cpu_offload
         # layer id mapping to flash attn output
         self.fa_output_mapping = {}
-        self.fa_stream = torch.cuda.Stream()
-        self.d2h_final_event = torch.cuda.Event()
-        self.h2d_final_event = torch.cuda.Event()
+        self.fa_stream = internlm_accelerator.Stream()
+        self.d2h_final_event = internlm_accelerator.Event()
+        self.h2d_final_event = internlm_accelerator.Event()
         # prepare for tensor buffer
         self.tensor_id_to_tensor_bufs = {}
 
@@ -69,10 +70,10 @@ class AttnOffloadManager:
     def offload_fa_output_with_layer(self, layer_idx):
         assert layer_idx in self.fa_output_mapping
 
-        self.fa_stream.wait_stream(torch.cuda.current_stream())
+        self.fa_stream.wait_stream(internlm_accelerator.current_stream())
         self.fa_stream.wait_event(self.d2h_final_event)
 
-        with torch.cuda.stream(self.fa_stream):
+        with internlm_accelerator.stream(self.fa_stream):
             _gpu_tensors = self.fa_output_mapping.pop(layer_idx)
             _cpu_tensors = []
             for _tensor in _gpu_tensors:
@@ -99,12 +100,12 @@ class AttnOffloadManager:
     def preload_fa_output_with_layer(self, layer_idx):
         assert layer_idx in self.fa_output_mapping
 
-        self.fa_stream.wait_stream(torch.cuda.current_stream())
+        self.fa_stream.wait_stream(internlm_accelerator.current_stream())
         self.fa_stream.wait_event(self.h2d_final_event)
 
         # Important: get device before with stream, in stream get device is error
         _device = get_current_device()
-        with torch.cuda.stream(self.fa_stream):
+        with internlm_accelerator.stream(self.fa_stream):
             _cpu_tensors = self.fa_output_mapping.pop(layer_idx)
             self.fa_output_mapping[layer_idx] = [
                 _tensor.to(device=_device, non_blocking=True) if _tensor is not None else _tensor

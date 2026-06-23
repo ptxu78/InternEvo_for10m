@@ -1,0 +1,7 @@
+seq_k	status	exit_code	max_allocated_gb	max_reserved_gb	log
+8k	ok	0	32.5727	44.25	log/1111seq8k_steps5_pp1_h1_c8_ws1.log
+16k	ok	0	32.5729	43.8828	log/1111seq16k_steps5_pp1_h1_c8_ws1.log
+32k	ok	0	33.3535	47.2539	log/1111seq32k_steps5_pp1_h1_c8_ws1.log
+48k	ok	0	37.4401	49.2051	log/1111seq48k_steps5_pp1_h1_c8_ws1.log
+64k	ok	0	43.1484	48.8301	log/1111seq64k_steps5_pp1_h1_c8_ws1.log
+80k	ok	0	50.5006	56.8711	log/1111seq80k_steps5_pp1_h1_c8_ws1.log
