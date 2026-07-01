@@ -147,3 +147,7 @@ llm_ckpts
 events.*
 memory_trace
 RUN*/
+
+# InternEvo run artifacts
+log/
+profile_log/

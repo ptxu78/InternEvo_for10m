@@ -225,7 +225,7 @@ parallel = dict(
     zero1=dict(size=-1),
     tensor=dict(size=TP_SIZE, mode="isp"),
     pipeline=dict(size=_get_env("CFG_PP_SIZE", 1), interleaved_overlap=True),
-    weight=dict(size=1, overlap=True, launch_allgather_before="wo", forward_overlap_per="layer"),
+    weight=dict(size=HEAD_SIZE * CONTEXT_SIZE, overlap=True, launch_allgather_before="wo", forward_overlap_per="layer"),
     sequence_2D=dict(
         enable=True,
         head_size=HEAD_SIZE,
