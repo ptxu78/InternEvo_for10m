@@ -132,7 +132,7 @@ def main(args):
     # initialize model
     model = create_model()
 
-    use_profile = True
+    use_profile = False
     prof_obj = None
     rank = dist.get_rank()
     logdir = "./profile_log"
