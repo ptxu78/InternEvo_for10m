@@ -8,6 +8,8 @@ from typing import Any, Callable, Iterable, List, Optional
 import torch
 import torch.distributed as dist
 
+from internlm.accelerator import get_accelerator
+
 from internlm.core.context import ParallelMode
 from internlm.core.context import global_context as gpc
 from internlm.core.engine import Engine
@@ -153,6 +155,8 @@ class NonPipelineScheduler(BaseScheduler):
         # backward
         if not forward_only:
             self._call_hooks("before_backward", None, None)
+            if getattr(gpc.config.data, "empty_cache_before_backward", False):
+                get_accelerator().empty_cache()
             engine.backward(loss)
             self._call_hooks("after_backward", None)
 

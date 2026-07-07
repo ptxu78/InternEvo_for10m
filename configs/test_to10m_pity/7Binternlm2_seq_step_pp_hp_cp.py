@@ -82,6 +82,7 @@ data = dict(
     train_folder=TRAIN_FOLDER,
     valid_folder=VALID_FOLDER,
     empty_cache_and_diag_interval=_get_env("CFG_EMPTY_CACHE_AND_DIAG_INTERVAL", 200),
+    empty_cache_before_backward=_get_env("CFG_EMPTY_CACHE_BEFORE_BACKWARD", False),
     diag_outlier_ratio=1.1,
     use_packed_dataset=False,
     fixed_random_dataset_seqlen=_get_env("CFG_FIXED_RANDOM_DATASET_SEQLEN", True),
