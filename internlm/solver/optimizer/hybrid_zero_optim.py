@@ -798,6 +798,10 @@ class HybridZeroOptimizer(BaseOptimizer):
         self._bucket_in_progress = []
         self._param_store.clear_grads_of_previous_reduced_params()
 
+        if getattr(gpc.config.data, "empty_cache_before_optimizer", False):
+            internlm_accelerator.synchronize()
+            internlm_accelerator.empty_cache()
+
         # compute norm for gradients in the last bucket
         total_norms = {}
         for group_id in range(self.num_param_groups):
@@ -917,6 +921,8 @@ class HybridZeroOptimizer(BaseOptimizer):
                     fp32_param = self._fp32_flat_param_groups_of_current_rank[group_id]
                     fp16_param.data.copy_(fp32_param)
         internlm_accelerator.synchronize()
+        if getattr(gpc.config.data, "empty_cache_before_param_broadcast", False):
+            internlm_accelerator.empty_cache()
         self.broadcast_params()
 
         timer("step").stop()

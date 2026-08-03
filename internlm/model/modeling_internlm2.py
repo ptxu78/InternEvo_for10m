@@ -549,6 +549,24 @@ class InternLM2(BaseModel):
 
         is_internlm3 = gpc.config.model_type == "INTERNLM3"
 
+        vocab_weight_names = (
+            ("model.embed_tokens.weight", "lm_head.weight")
+            if is_internlm3
+            else ("model.tok_embeddings.weight", "output.weight")
+        )
+        target_vocab_size = gpc.config.model.vocab_size
+        for weight_name in vocab_weight_names:
+            if weight_name not in state_dict:
+                continue
+            source_vocab_size = state_dict[weight_name].size(0)
+            assert source_vocab_size <= target_vocab_size, (
+                f"HF vocabulary {source_vocab_size} exceeds configured vocabulary {target_vocab_size}"
+            )
+            if source_vocab_size < target_vocab_size:
+                state_dict[weight_name] = torch.nn.functional.pad(
+                    state_dict[weight_name], (0, 0, 0, target_vocab_size - source_vocab_size)
+                )
+
         for idx, i in enumerate(range(model.first_layer, model.last_layer)):
             layer_ids = i
 

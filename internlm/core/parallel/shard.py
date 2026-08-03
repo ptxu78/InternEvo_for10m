@@ -17,6 +17,7 @@ from internlm.utils.utils import TensorParallelMode
 
 logger = get_logger(__file__)
 internlm_accelerator = get_accelerator()
+_sequence_shard_layout_logged = False
 
 
 def _split_data_for_sequence_parallel(data, label):
@@ -49,6 +50,8 @@ def _split_data_for_sequence_parallel(data, label):
 
 
 def _split_data_for_2D_sequence_parallel(data, label):
+    global _sequence_shard_layout_logged
+
     if gpc.config.parallel.sequence_2D.enable is False or gpc.get_world_size(ParallelMode.TENSOR) <= 1:
         return data, label
 
@@ -125,6 +128,16 @@ def _split_data_for_2D_sequence_parallel(data, label):
     )
     label = label.index_select(seq_dim, index)
     label = label.view(*label.shape[0:seq_dim], -1, *label.shape[(seq_dim + 2) :])
+
+    if not _sequence_shard_layout_logged:
+        logger.info(
+            f"CP_SHARD global_rank={gpc.get_global_rank()} "
+            f"cp_id={cp_rank} cp_size={cp_size} "
+            f"hp_id={hp_rank} hp_size={hp_size} "
+            f"subseq_len={data['input_ids'].shape[seq_dim]} "
+            f"input_ids_shape={tuple(data['input_ids'].shape)}"
+        )
+        _sequence_shard_layout_logged = True
 
     # if gpc.config.model.parallel_output is False:
     label = _gather(label, ParallelMode.TENSOR, dim=seq_dim)

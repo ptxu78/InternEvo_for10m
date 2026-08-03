@@ -965,8 +965,6 @@ def record_current_batch_training_metrics(
         tgs_avg = round(tgs_statistic["sum_tgs"] / tgs_statistic["sum_step"], 2)
         tgs_SMA = round(tgs_statistic["SMA_tg_50"] / tgs_statistic["SMA_time_50"], 2)
 
-        tflops = get_tflops_func(time_cost)
-
         tgs_origin = round(
             num_tokens_in_batch
             * gpc.get_world_size(ParallelMode.DATA)
@@ -981,7 +979,6 @@ def record_current_batch_training_metrics(
         )
 
         infos = {
-            "tflops": tflops,
             "step": batch_count,
             "loss": loss.item() - moe_loss.item() if moe_loss is not None else loss.item(),
             "real_tgs": real_tgs,
@@ -1001,6 +998,7 @@ def record_current_batch_training_metrics(
 
         infos["micro_num"] = len(batch[1])
         infos["num_consumed_tokens"] = train_state.num_consumed_tokens
+        infos["packed_length"] = num_tokens_in_batch  # the total tokens in the packed batch
         infos["inf_nan_skip_batches"] = train_state.inf_nan_skip_batches
         infos["num_samples_in_batch"] = num_samples_in_batch  # the number of batches which have the most samples
         infos["largest_length"] = max_length_in_batch  # the longest input

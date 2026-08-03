@@ -19,7 +19,7 @@ JOB_NAME = "7b_internlm2_train_pityto10m"
 model_type = "INTERNLM2"
 DO_ALERT = False
 
-VOCAB_SIZE = 92544
+VOCAB_SIZE = _get_env("CFG_VOCAB_SIZE", 92544)
 SEQ_LEN = _get_env("CFG_SEQ_LEN", 1024 * 1024)
 HIDDEN_SIZE = 4096
 NUM_ATTENTION_HEAD = 32
@@ -32,6 +32,13 @@ MODEL_ONLY_FOLDER = "local:llm_ckpts/xxxx"
 # fs: 'local:/mnt/nfs/XXX'
 SAVE_CKPT_FOLDER = "local:llm_ckpts"
 LOAD_CKPT_FOLDER = "local:llm_ckpts/49"
+LOAD_HF_CHECKPOINT = bool(_get_env("CFG_LOAD_HF_CHECKPOINT", False))
+HF_CHECKPOINT_FOLDER = str(
+    _get_env(
+        "CFG_HF_CHECKPOINT_FOLDER",
+        "local:/MindSpeed-LLM/InternEvo_for10m/llm_ckpts/hf/internlm2-7b",
+    )
+)
 
 # boto3 Ckpt folder format:
 # import os
@@ -42,6 +49,11 @@ CHECKPOINT_EVERY = 50
 ckpt = dict(
     enable_save_ckpt=False,  # enable ckpt save.
     save_ckpt_folder=SAVE_CKPT_FOLDER,  # Path to save training ckpt.
+    # The official InternLM2-7B Hugging Face weights are loaded only when
+    # CFG_LOAD_HF_CHECKPOINT=True. Keep it False for a scratch baseline.
+    load_ckpt_info=(
+        dict(path=HF_CHECKPOINT_FOLDER, content=("model",), ckpt_type="hf") if LOAD_HF_CHECKPOINT else None
+    ),
     # 'auto_resume' is designed to automatically load the latest checkpoint from 'save_ckpt_folder' when encountering
     # training interruptions/hangs caused by hardware failures, using a scheduling system (such as k8s/slurm)
     # with an automatic restart mechanism upon training reboot.
@@ -56,18 +68,18 @@ ckpt = dict(
     oss_snapshot_freq=int(CHECKPOINT_EVERY / 2),  # snapshot ckpt save frequency.
 )
 
-TRAIN_FOLDER = None
-VALID_FOLDER = None  # "/path/to/dataset"
+TRAIN_FOLDER = _get_env("CFG_TRAIN_FOLDER", None)
+VALID_FOLDER = _get_env("CFG_VALID_FOLDER", None)
 data = dict(
     seq_len=SEQ_LEN,
     # micro_num means the number of micro_batch contained in one gradient update
-    micro_num=1,
+    micro_num=_get_env("CFG_MICRO_NUM", 1),
     # packed_length = micro_bsz * SEQ_LEN
     micro_bsz=1,
     # defaults to the value of micro_num
-    valid_micro_num=4,
+    valid_micro_num=_get_env("CFG_VALID_MICRO_NUM", 4),
     # defaults to 0, means disable evaluate
-    valid_every=0,
+    valid_every=_get_env("CFG_VALID_EVERY", 0),
     pack_sample_into_one=False,
     total_steps=_get_env("CFG_TOTAL_STEPS", 5),
     skip_batches=str(_get_env("CFG_SKIP_BATCHES", "")),
@@ -78,14 +90,18 @@ data = dict(
     #       (IMPORTANT): The interval step size is 'micro_bsz'.
     rampup_batch_size="",
     # Datasets with less than 50 rows will be discarded
-    min_length=50,
+    min_length=_get_env("CFG_MIN_LENGTH", 50),
     train_folder=TRAIN_FOLDER,
     valid_folder=VALID_FOLDER,
     empty_cache_and_diag_interval=_get_env("CFG_EMPTY_CACHE_AND_DIAG_INTERVAL", 200),
     empty_cache_before_backward=_get_env("CFG_EMPTY_CACHE_BEFORE_BACKWARD", False),
+    empty_cache_before_optimizer=_get_env("CFG_EMPTY_CACHE_BEFORE_OPTIMIZER", False),
+    empty_cache_before_param_broadcast=_get_env("CFG_EMPTY_CACHE_BEFORE_PARAM_BROADCAST", False),
     diag_outlier_ratio=1.1,
-    use_packed_dataset=False,
+    use_packed_dataset=_get_env("CFG_USE_PACKED_DATASET", False),
     fixed_random_dataset_seqlen=_get_env("CFG_FIXED_RANDOM_DATASET_SEQLEN", True),
+    random_dataset_num_samples=_get_env("CFG_RANDOM_DATASET_NUM_SAMPLES", 500),
+    repeat_dataset=_get_env("CFG_REPEAT_DATASET", 1),
 )
 
 grad_scaler = dict(
@@ -114,7 +130,7 @@ hybrid_zero_optimizer = dict(
     # bucket size for nccl communication params
     reduce_bucket_size=512 * 1024 * 1024,
     # grad clipping
-    clip_grad_norm=1.0,
+    clip_grad_norm=_get_env("CFG_CLIP_GRAD_NORM", 1.0),
 )
 
 # loss config (dict):
@@ -133,7 +149,7 @@ hybrid_zero_optimizer = dict(
 loss = dict(label_smoothing=0, op_type="py_vocab_parallel")
 
 adam = dict(
-    lr=1e-4,
+    lr=_get_env("CFG_LR", 1e-4),
     adam_beta1=0.9,
     adam_beta2=0.95,
     adam_beta2_c=0,
@@ -144,8 +160,8 @@ adam = dict(
 lr_scheduler = dict(
     total_steps=data["total_steps"],
     init_steps=0,  # optimizer_warmup_step
-    warmup_ratio=0.01,
-    eta_min=1e-5,
+    warmup_ratio=_get_env("CFG_WARMUP_RATIO", 0.01),
+    eta_min=_get_env("CFG_ETA_MIN", 1e-5),
     last_epoch=-1,
 )
 
@@ -183,6 +199,9 @@ model = dict(
     layer_norm_epsilon=1e-5,
     num_kv_attention_heads=NUM_KV_ATTENTION_HEAD,
     use_flash_attn=USE_FLASH_ATTN,
+    # Match internlm/internlm2-7b config.json (rope_theta=1_000_000).
+    # This is kept identical for checkpoint and scratch comparison runs.
+    rope_base=1_000_000,
     # Whether the odd and even columns of the query and key in the model are normally interleaved.
     # If it's True, the model's odd and even columns are normally ordered; if it's False,
     # it means that the model has prematurely concatenated all odd columns and even columns in front
@@ -226,7 +245,14 @@ parallel = dict(
     zero1=dict(size=-1),
     tensor=dict(size=TP_SIZE, mode="isp"),
     pipeline=dict(size=_get_env("CFG_PP_SIZE", 1), interleaved_overlap=True),
-    weight=dict(size=HEAD_SIZE * CONTEXT_SIZE, overlap=True, launch_allgather_before="wo", forward_overlap_per="layer"),
+    weight=dict(
+        size=HEAD_SIZE * CONTEXT_SIZE,
+        # ISP weight-prefetch overlap can leave outstanding all-gather state
+        # when switching from training to validation on this NPU stack.
+        overlap=_get_env("CFG_WEIGHT_OVERLAP", True),
+        launch_allgather_before="wo",
+        forward_overlap_per="layer",
+    ),
     sequence_2D=dict(
         enable=True,
         head_size=HEAD_SIZE,
